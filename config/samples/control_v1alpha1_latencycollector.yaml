@@ -1,0 +1,12 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: LatencyCollector
+metadata:
+  labels:
+    app.kubernetes.io/name: latencycollector
+    app.kubernetes.io/instance: latencycollector-sample
+    app.kubernetes.io/part-of: latency-collector
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: latency-collector
+  name: latencycollector-sample
+spec:
+  # TODO(user): Add fields here

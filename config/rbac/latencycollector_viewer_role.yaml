@@ -1,0 +1,27 @@
+# permissions for end users to view latencycollectors.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: latencycollector-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: latency-collector
+    app.kubernetes.io/part-of: latency-collector
+    app.kubernetes.io/managed-by: kustomize
+  name: latencycollector-viewer-role
+rules:
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - latencycollectors
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - latencycollectors/status
+  verbs:
+  - get

@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- control_v1alpha1_latencycollector.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

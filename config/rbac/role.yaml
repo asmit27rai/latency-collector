@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - latencycollectors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - latencycollectors/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - latencycollectors/status
+  verbs:
+  - get
+  - patch
+  - update
