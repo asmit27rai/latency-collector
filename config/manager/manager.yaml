@@ -70,7 +70,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: asmitk1927/ks-latency:v0.2.2
+        image: asmitk1927/ks-latency:v0.3.1
         imagePullPolicy: Always
         name: manager
         securityContext:

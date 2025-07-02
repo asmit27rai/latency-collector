@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: asmitk1927/ks-latency
-  newTag: v0.2.2
+  newTag: v0.3.1
