@@ -82,7 +82,7 @@ func main() {
 	pflag.StringVar(&itsContext, "its-context", "its1", "Context name for ITS cluster in kubeconfig")
 	pflag.StringVar(&wecContexts, "wec-contexts", "cluster1", "Comma-separated context names for WEC clusters in kubeconfig")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "", "If empty, use in‑cluster config")
-	pflag.StringVar(&monitoredNamespace, "monitored-namespace", "default", "Namespace of the deployment to monitor")
+	pflag.StringVar(&monitoredNamespace, "monitored-namespace", "latency-collector-system", "Namespace of the deployment to monitor")
 	pflag.StringVar(&bindingName, "binding-name", "nginx-singleton-bpolicy", "Name of the binding policy for the monitored deployment")
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
