@@ -56,6 +56,10 @@ spec:
       #             operator: In
       #             values:
       #               - linux
+      volumes:
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig-secret
       securityContext:
         runAsNonRoot: true
         # TODO(user): For common cases that do not require escalating privileges
@@ -70,14 +74,25 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: asmitk1927/ks-latency:v0.3.1
+        - --kubeconfig=/etc/kubeconfig/kubeconfig
+        - --metrics-bind-address=:2222
+        image: asmitk1927/ks-latency:v0.3.3
         imagePullPolicy: Always
         name: manager
+        ports:
+        - containerPort: 2222
+          name: metrics
+          protocol: TCP
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - "ALL"
+        volumeMounts:
+        - name: kubeconfig
+          mountPath: /etc/kubeconfig
+          subPath: kubeconfig
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /healthz

@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 
@@ -45,8 +44,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	// "k8s.io/client-go/tools/clientcmd"
-	// "time"
+	"k8s.io/client-go/tools/clientcmd"
+	"time"
 )
 
 var (
@@ -245,38 +244,30 @@ func main() {
 }
 
 func buildClusterConfig(kubeconfigPath, context string) *rest.Config {
-	fmt.Printf("Using kubeconfig: %s, context: %s\n", kubeconfigPath, context)
-	// if kubeconfigPath == "" {
+	if kubeconfigPath != "" {
+		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		loadingRules.ExplicitPath = kubeconfigPath
+
+		overrides := &clientcmd.ConfigOverrides{}
+		if context != "" {
+			overrides.CurrentContext = context
+		}
+
+		config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			loadingRules, overrides).ClientConfig()
+		if err != nil {
+			setupLog.Error(err, "unable to load kubeconfig", "path", kubeconfigPath, "context", context)
+			os.Exit(1)
+		}
+		config.Timeout = 15 * time.Second
+		return config
+	}
+
+	// fallback to in‑cluster
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		setupLog.Error(err, "unable to load in-cluster config")
+		setupLog.Error(err, "unable to load in‑cluster config")
 		os.Exit(1)
 	}
 	return config
-	// }
-
-	// if strings.HasPrefix(kubeconfigPath, "~/") {
-	// 	home, err := os.UserHomeDir()
-	// 	if err == nil {
-	// 		kubeconfigPath = strings.Replace(kubeconfigPath, "~", home, 1)
-	// 	}
-	// }
-
-	// loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	// loadingRules.ExplicitPath = kubeconfigPath
-
-	// overrides := &clientcmd.ConfigOverrides{}
-	// if context != "" {
-	// 	overrides.CurrentContext = context
-	// }
-
-	// config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-	// 	loadingRules, overrides).ClientConfig()
-	// if err != nil {
-	// 	setupLog.Error(err, "unable to load kubeconfig", "context", context)
-	// 	os.Exit(1)
-	// }
-
-	// config.Timeout = 15 * time.Second
-	// return config
 }
