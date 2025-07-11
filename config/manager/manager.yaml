@@ -76,7 +76,7 @@ spec:
         - --leader-elect
         - --kubeconfig=/etc/kubeconfig/kubeconfig
         - --metrics-bind-address=:2222
-        image: asmitk1927/ks-latency:v0.3.12
+        image: asmitk1927/ks-latency:v0.5.5
         imagePullPolicy: Always
         name: manager
         ports:

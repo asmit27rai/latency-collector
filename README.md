@@ -60,9 +60,7 @@ EOF
 ```
 
 ```bash
-make build
-make docker-build IMG=asmitk1927/ks-latency:v0.2.2
-make docker-push  IMG=asmitk1927/ks-latency:v0.2.2
-make deploy       IMG=asmitk1927/ks-latency:v0.2.2
+./setup-secrets.sh   --host-context kind-kubeflex   --wds wds1   --its its1   --wec-clusters cluster1,cluster2
+make deploy       IMG=asmitk1927/ks-latency:v0.5.5
 kubectl -n latency-collector-system get pods
 ```
