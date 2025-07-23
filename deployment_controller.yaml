@@ -319,6 +319,22 @@ subjects:
   namespace: latency-collector-system
 ---
 apiVersion: v1
+data:
+  get-kubeconfig.sh: |
+    #!/bin/sh
+    CP="$1"        # controlplane name or WEC context
+    MODE="$2"      # "in" for in-cluster, "ex" for external
+    FIELD="$([ "$MODE" = "in" ] && echo inClusterKey || echo key)"
+    SN=$(kubectl get controlplane "$CP" -o=jsonpath='{.status.secretRef.name}')
+    SNS=$(kubectl get controlplane "$CP" -o=jsonpath='{.status.secretRef.namespace}')
+    DK=$(kubectl get controlplane "$CP" -o=jsonpath="{.status.secretRef.${FIELD}}")
+    kubectl get secret "$SN" -n "$SNS" -o=jsonpath="{.data.${DK}}" | base64 -d
+kind: ConfigMap
+metadata:
+  name: latency-collector-latency-collector-helper
+  namespace: latency-collector-system
+---
+apiVersion: v1
 kind: Service
 metadata:
   labels:
@@ -370,9 +386,7 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:2222
         - --leader-elect
-        command:
-        - /manager
-        image: asmitk1927/ks-latency:v0.5.5
+        image: asmitk1927/ks-latency:v0.7.2
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -381,33 +395,15 @@ spec:
           initialDelaySeconds: 15
           periodSeconds: 20
         name: manager
-        ports:
-        - containerPort: 2222
-          name: metrics
-          protocol: TCP
         readinessProbe:
           httpGet:
             path: /readyz
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
         volumeMounts:
-        - mountPath: /etc/kubeconfig
-          name: kubeconfig
-          readOnly: true
-          subPath: kubeconfig
+        - mountPath: /mnt/shared
+          name: shared
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
@@ -431,11 +427,56 @@ spec:
           capabilities:
             drop:
             - ALL
-      securityContext:
-        runAsNonRoot: true
+      initContainers:
+      - command:
+        - /bin/sh
+        - -c
+        - /mnt/helper/get-kubeconfig.sh wds in > /mnt/shared/wds.kubeconfig
+        image: quay.io/kubestellar/kubectl:1.27.8
+        name: init-wds
+        volumeMounts:
+        - mountPath: /mnt/helper
+          name: helper
+        - mountPath: /mnt/shared
+          name: shared
+      - command:
+        - /bin/sh
+        - -c
+        - /mnt/helper/get-kubeconfig.sh its in > /mnt/shared/its.kubeconfig
+        image: quay.io/kubestellar/kubectl:1.27.8
+        name: init-its
+        volumeMounts:
+        - mountPath: /mnt/helper
+          name: helper
+        - mountPath: /mnt/shared
+          name: shared
+      - command:
+        - /bin/sh
+        - -c
+        - /mnt/helper/get-kubeconfig.sh cluster1 ex > /mnt/shared/wec-cluster1.kubeconfig
+        image: quay.io/kubestellar/kubectl:1.27.8
+        name: init-wec-cluster1
+        volumeMounts:
+        - mountPath: /mnt/helper
+          name: helper
+        - mountPath: /mnt/shared
+          name: shared
+      - command:
+        - /bin/sh
+        - -c
+        - /mnt/helper/get-kubeconfig.sh cluster2 ex > /mnt/shared/wec-cluster2.kubeconfig
+        image: quay.io/kubestellar/kubectl:1.27.8
+        name: init-wec-cluster2
+        volumeMounts:
+        - mountPath: /mnt/helper
+          name: helper
+        - mountPath: /mnt/shared
+          name: shared
       serviceAccountName: latency-collector-controller-manager
-      terminationGracePeriodSeconds: 10
       volumes:
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
+      - configMap:
+          defaultMode: 493
+          name: latency-collector-latency-collector-helper
+        name: helper
+      - emptyDir: {}
+        name: shared

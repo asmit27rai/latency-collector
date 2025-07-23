@@ -11,6 +11,22 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: system
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: latency-collector-helper
+  namespace: system
+data:
+  get-kubeconfig.sh: |
+    #!/bin/sh
+    CP="$1"        # controlplane name or WEC context
+    MODE="$2"      # "in" for in-cluster, "ex" for external
+    FIELD="$([ "$MODE" = "in" ] && echo inClusterKey || echo key)"
+    SN=$(kubectl get controlplane "$CP" -o=jsonpath='{.status.secretRef.name}')
+    SNS=$(kubectl get controlplane "$CP" -o=jsonpath='{.status.secretRef.namespace}')
+    DK=$(kubectl get controlplane "$CP" -o=jsonpath="{.status.secretRef.${FIELD}}")
+    kubectl get secret "$SN" -n "$SNS" -o=jsonpath="{.data.${DK}}" | base64 -d
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,94 +41,97 @@ metadata:
     app.kubernetes.io/part-of: latency-collector
     app.kubernetes.io/managed-by: kustomize
 spec:
+  replicas: 1
   selector:
     matchLabels:
       control-plane: controller-manager
-  replicas: 1
   template:
     metadata:
-      annotations:
-        kubectl.kubernetes.io/default-container: manager
       labels:
         control-plane: controller-manager
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
     spec:
-      # TODO(user): Uncomment the following code to configure the nodeAffinity expression
-      # according to the platforms which are supported by your solution.
-      # It is considered best practice to support multiple architectures. You can
-      # build your manager image using the makefile target docker-buildx.
-      # affinity:
-      #   nodeAffinity:
-      #     requiredDuringSchedulingIgnoredDuringExecution:
-      #       nodeSelectorTerms:
-      #         - matchExpressions:
-      #           - key: kubernetes.io/arch
-      #             operator: In
-      #             values:
-      #               - amd64
-      #               - arm64
-      #               - ppc64le
-      #               - s390x
-      #           - key: kubernetes.io/os
-      #             operator: In
-      #             values:
-      #               - linux
-      volumes:
-      - name: kubeconfig
-        secret:
-          secretName: kubeconfig-secret
-      securityContext:
-        runAsNonRoot: true
-        # TODO(user): For common cases that do not require escalating privileges
-        # it is recommended to ensure that all your Pods/Containers are restrictive.
-        # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
-        # Please uncomment the following code if your project does NOT have to work on old Kubernetes
-        # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
-        # seccompProfile:
-        #   type: RuntimeDefault
-      containers:
-      - command:
-        - /manager
-        args:
-        - --leader-elect
-        - --kubeconfig=/etc/kubeconfig/kubeconfig
-        - --metrics-bind-address=:2222
-        image: asmitk1927/ks-latency:v0.5.5
-        imagePullPolicy: Always
-        name: manager
-        ports:
-        - containerPort: 2222
-          name: metrics
-          protocol: TCP
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - "ALL"
-        volumeMounts:
-        - name: kubeconfig
-          mountPath: /etc/kubeconfig
-          subPath: kubeconfig
-          readOnly: true
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        # TODO(user): Configure the resources accordingly based on the project requirements.
-        # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
       serviceAccountName: controller-manager
-      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: helper
+          configMap:
+            name: latency-collector-helper
+            defaultMode: 0755
+        - name: shared
+          emptyDir: {}
+      initContainers:
+        - name: init-wds
+          image: quay.io/kubestellar/kubectl:1.27.8
+          command:
+            - /bin/sh
+            - -c
+            - /mnt/helper/get-kubeconfig.sh wds in > /mnt/shared/wds.kubeconfig
+          volumeMounts:
+            - name: helper
+              mountPath: /mnt/helper
+            - name: shared
+              mountPath: /mnt/shared
+
+        - name: init-its
+          image: quay.io/kubestellar/kubectl:1.27.8
+          command:
+            - /bin/sh
+            - -c
+            - /mnt/helper/get-kubeconfig.sh its in > /mnt/shared/its.kubeconfig
+          volumeMounts:
+            - name: helper
+              mountPath: /mnt/helper
+            - name: shared
+              mountPath: /mnt/shared
+
+        - name: init-wec-cluster1
+          image: quay.io/kubestellar/kubectl:1.27.8
+          command:
+            - /bin/sh
+            - -c
+            - /mnt/helper/get-kubeconfig.sh cluster1 ex > /mnt/shared/wec-cluster1.kubeconfig
+          volumeMounts:
+            - name: helper
+              mountPath: /mnt/helper
+            - name: shared
+              mountPath: /mnt/shared
+
+        - name: init-wec-cluster2
+          image: quay.io/kubestellar/kubectl:1.27.8
+          command:
+            - /bin/sh
+            - -c
+            - /mnt/helper/get-kubeconfig.sh cluster2 ex > /mnt/shared/wec-cluster2.kubeconfig
+          volumeMounts:
+            - name: helper
+              mountPath: /mnt/helper
+            - name: shared
+              mountPath: /mnt/shared
+
+      containers:
+        - name: manager
+          image: asmitk1927/ks-latency:v0.7.2
+          imagePullPolicy: Always
+          args:
+            - --leader-elect
+            - --metrics-bind-address=:2222
+            - --kubeconfig=/mnt/shared/manager.kubeconfig
+            - --wds-kubeconfig=/mnt/shared/wds.kubeconfig
+            - --its-kubeconfig=/mnt/shared/its.kubeconfig
+            - --wec-kubeconfigs=/mnt/shared/wec-cluster1.kubeconfig,/mnt/shared/wec-cluster2.kubeconfig
+          volumeMounts:
+            - name: shared
+              mountPath: /mnt/shared
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10

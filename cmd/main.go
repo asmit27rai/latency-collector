@@ -72,7 +72,9 @@ func main() {
 		wdsContext         string
 		itsContext         string
 		wecContexts        string
-		kubeconfigPath     string
+		wdskubeconfigPath  string
+		itskubeconfigPath  string
+		weckubeconfigPaths string
 		monitoredNamespace string
 		bindingName        string
 	)
@@ -80,7 +82,9 @@ func main() {
 	pflag.StringVar(&wdsContext, "wds-context", "wds1", "Context name for WDS cluster in kubeconfig")
 	pflag.StringVar(&itsContext, "its-context", "its1", "Context name for ITS cluster in kubeconfig")
 	pflag.StringVar(&wecContexts, "wec-contexts", "cluster1", "Comma-separated context names for WEC clusters in kubeconfig")
-	pflag.StringVar(&kubeconfigPath, "kubeconfig", "", "If empty, use in‑cluster config")
+	pflag.StringVar(&wdskubeconfigPath, "wds-kubeconfig", "", "If empty, use in‑cluster config")
+	pflag.StringVar(&itskubeconfigPath, "its-kubeconfig", "", "If empty, use in‑cluster config")
+	pflag.StringVar(&weckubeconfigPaths, "wec-kubeconfigs", "", "If empty, use in‑cluster config")
 	pflag.StringVar(&monitoredNamespace, "monitored-namespace", "latency-collector-system", "Namespace of the deployment to monitor")
 	pflag.StringVar(&bindingName, "binding-name", "nginx-singleton-bpolicy", "Name of the binding policy for the monitored deployment")
 
@@ -121,7 +125,7 @@ func main() {
 		TLSOpts: tlsOpts,
 	})
 
-	mgrCfg := buildClusterConfig(kubeconfigPath, wdsContext)
+	mgrCfg := buildClusterConfig("", wdskubeconfigPath)
 
 	mgr, err := ctrl.NewManager(mgrCfg, ctrl.Options{
 		Scheme: scheme,
@@ -162,19 +166,19 @@ func main() {
 	// Split WEC contexts
 	wecContextList := []string{}
 	if wecContexts != "" {
-		wecContextList = strings.Split(wecContexts, ",")
+		wecContextList = strings.Split(weckubeconfigPaths, ",")
 	}
 
 	// Build clients for all clusters
-	wdsCfg := buildClusterConfig(kubeconfigPath, wdsContext)
-	itsCfg := buildClusterConfig(kubeconfigPath, itsContext)
+	wdsCfg := buildClusterConfig("", wdskubeconfigPath)
+	itsCfg := buildClusterConfig("", itskubeconfigPath)
 
 	// Create WEC clients map
 	wecClients := make(map[string]kubernetes.Interface)
 	wecDynamics := make(map[string]dynamic.Interface)
 
 	for _, ctx := range wecContextList {
-		wecCfg := buildClusterConfig(kubeconfigPath, ctx)
+		wecCfg := buildClusterConfig("", ctx)
 		clientSet, err := kubernetes.NewForConfig(wecCfg)
 		if err != nil {
 			setupLog.Error(err, "unable to create WEC client", "context", ctx)
